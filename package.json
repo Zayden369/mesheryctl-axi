@@ -1,0 +1,54 @@
+{
+  "name": "mesheryctl-axi",
+  "version": "0.1.0",
+  "description": "AXI-compliant mesheryctl wrapper - token-efficient TOON output for agent workflows",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meshery-extensions/mesheryctl-axi.git"
+  },
+  "keywords": [
+    "meshery",
+    "mesheryctl",
+    "cli",
+    "agent",
+    "axi",
+    "toon"
+  ],
+  "bin": {
+    "mesheryctl-axi": "dist/bin/mesheryctl-axi.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx bin/mesheryctl-axi.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@toon-format/toon": "^2.1.0",
+    "axi-sdk-js": "^0.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "homepage": "https://github.com/meshery-extensions/mesheryctl-axi#readme",
+  "bugs": {
+    "url": "https://github.com/meshery-extensions/mesheryctl-axi/issues"
+  }
+}

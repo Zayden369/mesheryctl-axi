@@ -1,59 +1,56 @@
-name-template: 'Meshery v$NEXT_PATCH_VERSION'
-tag-template: 'v$NEXT_PATCH_VERSION'
+# Adapted from layer5io/sistent's .github/release-drafter.yml.
+#
+# $RESOLVED_VERSION, not $NEXT_PATCH_VERSION: it is what routes the
+# version-resolver below into the drafted tag. With `default: patch` an
+# unlabelled PR resolves to the next patch; label a PR `minor` or `major` to
+# draft a larger bump. With no previous release, Release Drafter drafts v0.1.0,
+# which matches package.json's initial version.
+#
+# mesheryctl-axi is pre-1.0: a breaking change to the agent-facing output
+# contract (renamed TOON fields, changed exit codes, removed commands) is a
+# `minor`, not a `major`. See docs/release-procedure.md.
+name-template: 'mesheryctl-axi v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
 categories:
   - title: '🚀 Features'
     labels:
       - 'kind/feature'
       - 'kind/enhancement'
-  - title: '⌨️ Meshery CLI'
-    labels:
-      - 'component/mesheryctl'
-  - title: '🖥 Meshery UI'
-    labels:
-      - 'component/ui'
-  - title: '🔋 Patterns, Filters, Applications'
-    labels:
-      - 'component/patterns'
-      - 'component/applications'
-      - 'component/filters'      
   - title: '🐛 Bug Fixes'
     labels:
       - 'kind/fix'
       - 'kind/bugfix'
       - 'kind/bug'
+      - 'bug'
   - title: '🧰 Maintenance'
     labels:
       - 'kind/chore'
       - 'area/ci'
-      - 'area/tests'
-  - title: 📖 Documentation
-    label: area/docs
-  - title: 🔒 Security
-    label: security  
+      - 'area/test'
+      - 'pr/dependencies'
+  - title: '📖 Documentation'
+    labels:
+      - 'area/docs'
+      - 'documentation'
+  - title: '🔒 Security'
+    label: 'security'
 change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+version-resolver:
+  major:
+    labels:
+      - 'major'
+  minor:
+    labels:
+      - 'minor'
+  patch:
+    labels:
+      - 'patch'
+  default: patch
 template: |
   ## What's New
-  ## 🔤 General
   $CHANGES
 
-  ## 👨🏽‍💻 Contributors
+  ## Contributors
 
   Thank you to our contributors for making this release possible:
   $CONTRIBUTORS
-autolabeler:
-  - label: 'area/docs'
-    branch:
-      - '/docs/'
-  - label: 'area/ci'    
-    branch:
-      - '/.github/'
-  - label: 'component/ui'
-    branch:
-      - '/ui/'
-      - '/provider-ui/'
-  - label: 'component/mesheryctl'
-    branch:
-      - '/mesheryctl/'
-  - label: 'area/lifecycle'
-    branch:
-      - '/install/'

@@ -1,0 +1,58 @@
+name: Node Checks
+
+# Adapted from layer5io/sistent's node-checks.yml. Builds the package with
+# `tsc`, runs the vitest suite, and smoke-runs the built bin on every
+# supported Node.js LTS line. Lint/format steps are added once the repo has
+# ESLint/Prettier configured.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility-check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22, 24]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install Dependencies
+        run: make setup
+
+      - name: Build Project
+        run: make build
+
+      - name: Run Tests
+        run: make tests
+
+      - name: Smoke-run the built bin
+        # --version is answered by axi-sdk-js's fast path and needs no mesheryctl.
+        run: |
+          set -euo pipefail
+          expected=$(node -p "require('./package.json').version")
+          actual=$(node dist/bin/mesheryctl-axi.js --version)
+          echo "mesheryctl-axi --version -> ${actual}"
+          case "$actual" in
+            *"$expected"*) ;;
+            *) echo "::error::built bin reported '${actual}', expected version ${expected}"; exit 1 ;;
+          esac
+
+      - name: Verify package contents
+        run: npm pack --dry-run

@@ -1,0 +1,194 @@
+name: Publish Node.js Package
+
+# Adapted from layer5io/sistent's release.yml ("Publish Node.js Package"), with
+# the install/publish split from meshery/schemas' publish-npm-package.yml.
+#
+# Trigger: publishing the Release Drafter draft (see release-drafter.yml and
+# .agents/skills/mesheryctl-axi-release/SKILL.md). The release tag is the
+# version source of truth; this workflow stamps it into package.json, builds
+# with `tsc`, runs the tests, publishes `mesheryctl-axi` to npm with
+# provenance, verifies the version is live on the registry, and opens (and
+# auto-merges) a PR that bumps package.json on master to the published version.
+#
+# Authentication: gated on the NPM_TOKEN repository secret (required for the
+# first publish - npm trusted publishing (OIDC) can only be configured once the
+# package exists on the registry). npm >= 11.5 prefers OIDC trusted publishing
+# when it is configured for the package and falls back to NODE_AUTH_TOKEN, so
+# this workflow keeps working unchanged after the migration described in
+# docs/release-procedure.md.
+
+on:
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release Version"
+        required: true
+        default: "v0.1.0"
+        type: string
+
+permissions:
+  id-token: write  # Required for npm provenance / OIDC
+  contents: read
+
+jobs:
+  publish:
+    if: github.repository == 'meshery-extensions/mesheryctl-axi'
+    runs-on: ubuntu-24.04
+
+    permissions:
+      id-token: write  # Required for npm provenance / OIDC trusted publishing
+      contents: write
+      pull-requests: write  # Required to open the version-bump-back PR
+      issues: write  # peter-evans/create-pull-request needs this to apply labels when falling back to GITHUB_TOKEN
+    steps:
+      - name: "Require NPM_TOKEN"
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error title=NPM_TOKEN missing::The NPM_TOKEN repository secret is not set, so mesheryctl-axi cannot be published. A maintainer must add an npm automation (or granular publish) token as the NPM_TOKEN secret - see docs/release-procedure.md."
+            exit 1
+          fi
+
+      - name: "Resolve target branch"
+        id: target_branch
+        env:
+          # github.event.release.target_commitish can be a bare branch name
+          # ("master") or a fully-qualified ref ("refs/heads/master") depending
+          # on how the release was created. peter-evans/create-pull-request's
+          # `base` must be a short branch name, so strip the refs/heads/ prefix
+          # once here and reuse the result for both checkout and the bump PR.
+          TARGET: ${{ github.event.release.target_commitish || 'master' }}
+        run: |
+          set -euo pipefail
+          echo "name=${TARGET#refs/heads/}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          # Check out the release's target branch (typically master) so the
+          # subsequent version-bump commit is based on the branch HEAD, not on
+          # the tag's detached commit. Falls back to master for workflow_dispatch.
+          ref: ${{ steps.target_branch.outputs.name }}
+          # A full clone lets peter-evans/create-pull-request work without an
+          # internal shallow fetch into the checked-out branch.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          registry-url: "https://registry.npmjs.org"
+
+      - name: "Set Package Version"
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name || inputs.tag_name }}
+        run: |
+          # Strip a leading 'v' from the release tag (v0.2.0 -> 0.2.0) and set
+          # package.json#version. --allow-same-version makes the step idempotent
+          # when master's package.json already matches the tag.
+          # --no-git-tag-version prevents npm from creating an extra tag.
+          VERSION="${TAG_NAME#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: "Resolve normalized version"
+        id: resolved_version
+        env:
+          RAW_VERSION: ${{ github.event.release.tag_name || inputs.tag_name }}
+        run: |
+          set -euo pipefail
+          # Strip leading 'v' to match what the "Set Package Version" step writes into package.json.
+          normalized="${RAW_VERSION#v}"
+          if ! printf '%s' "$normalized" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Release tag must match v<major>.<minor>.<patch>; got '$RAW_VERSION'." >&2
+            exit 1
+          fi
+          echo "version=$normalized" >> "$GITHUB_OUTPUT"
+          echo "Resolved normalized version: $normalized"
+
+      - name: Install, Build, and Test
+        # `npm ci` keeps the install strictly driven by the committed lockfile so
+        # the bump-back PR's diff stays scoped to the version change.
+        run: |
+          npm ci
+          npm run build
+          npm test
+        env:
+          NODE_AUTH_TOKEN: ''  # Explicitly empty for install
+
+      - name: Publish Package
+        run: npm publish --provenance --access public --verbose
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # A published GitHub release does not prove the package reached npm.
+      # Poll the registry until the exact version is visible.
+      - name: Verify version is live on npm
+        env:
+          VERSION: ${{ steps.resolved_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if [ "$(npm view "mesheryctl-axi@${VERSION}" version 2>/dev/null)" = "$VERSION" ]; then
+              echo "mesheryctl-axi@${VERSION} is live on npm" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Waiting for mesheryctl-axi@${VERSION} to appear on npm (attempt ${attempt}/20)..."
+            sleep 15
+          done
+          echo "::error::mesheryctl-axi@${VERSION} was published but is not visible on the npm registry after 5 minutes."
+          exit 1
+
+      # Commit the package.json / package-lock.json version bump back to the
+      # release's target branch so master's on-disk version tracks what was
+      # actually published to npm. Opened as a PR (the pattern sistent uses) so
+      # it works when master is branch-protected.
+      #
+      # continue-on-error keeps npm publish success the source of truth for the
+      # workflow's conclusion. If the bump-back PR fails to open, a maintainer
+      # can open it by hand.
+      - name: Open PR with package.json version bump
+        id: bump_pr
+        if: ${{ success() }}
+        continue-on-error: true
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GH_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+          commit-message: |
+            chore(release): bump package.json to v${{ steps.resolved_version.outputs.version }} [skip ci]
+          committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          signoff: true
+          branch: release/version-bump/v${{ steps.resolved_version.outputs.version }}
+          base: ${{ steps.target_branch.outputs.name }}
+          delete-branch: true
+          title: "chore(release): bump package.json to v${{ steps.resolved_version.outputs.version }}"
+          add-paths: |
+            package.json
+            package-lock.json
+          body: |
+            Bumps `package.json` and `package-lock.json` to `v${{ steps.resolved_version.outputs.version }}` to match the version just published to npm.
+
+            Auto-generated by the `Publish Node.js Package` workflow after a successful `npm publish --provenance`, so that the target branch tracks the published npm version instead of drifting behind it.
+
+            The commit message includes `[skip ci]`: the content was already CI-gated by the PR that merged into the release tag.
+          labels: |
+            kind/chore
+          draft: false
+
+      # Auto-merge the version-bump-back PR. It only rewrites package.json /
+      # package-lock.json to the version just published and carries [skip ci].
+      # `--admin` needs GH_ACCESS_TOKEN with admin/bypass rights once master is
+      # branch-protected; with the GITHUB_TOKEN fallback the merge may be refused,
+      # in which case the PR is simply left for a maintainer (continue-on-error).
+      - name: Auto-merge the version-bump PR
+        if: ${{ steps.bump_pr.outputs.pull-request-number != '' && (steps.bump_pr.outputs.pull-request-operation == 'created' || steps.bump_pr.outputs.pull-request-operation == 'updated') }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GH_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.bump_pr.outputs.pull-request-number }}
+        run: |
+          gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --merge --admin
