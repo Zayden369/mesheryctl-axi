@@ -38,6 +38,101 @@ npx -y mesheryctl-axi
   - Install: https://docs.meshery.io/installation
   - Override the binary: `MESHERYCTL_BIN=/path/to/mesheryctl`
 
+## Agent quickstart
+
+Use this sequence when setting up an agent, or when preparing a machine for an
+agent to operate Meshery.
+
+### 1. Prepare the environment
+
+An agent cannot install credentials or make an unavailable Meshery Server
+reachable by itself. Before starting, confirm that:
+
+- Node.js 22 or newer is installed.
+- `mesheryctl` is installed and available on `PATH`.
+- A Meshery Server is reachable.
+- The active context is authenticated.
+
+```bash
+mesheryctl system login
+mesheryctl system context view
+```
+
+If `mesheryctl` is installed outside `PATH`, point the wrapper to the executable:
+
+```bash
+MESHERYCTL_BIN=/absolute/path/to/mesheryctl npx -y mesheryctl-axi
+```
+
+### 2. Start with the content-first home
+
+Make the no-argument command the agent's first call:
+
+```bash
+npx -y mesheryctl-axi
+```
+
+It reports the wrapper's purpose, best-effort Meshery system information, and a
+`help[]` list of supported next actions. Treat `help[]` as executable guidance:
+choose a listed command instead of inventing a subcommand or flag.
+
+The following output was captured from the current v0.1.0 command. The
+environment-specific `bin` path is omitted:
+
+```text
+description: Agent ergonomic wrapper around mesheryctl. Prefer this over raw mesheryctl for agent workflows. Requires mesheryctl installed and authenticated (MESHERYCTL_BIN to override).
+system_status: unavailable
+system_context: unavailable
+help[4]:
+  mesheryctl-axi connection list
+  mesheryctl-axi system status
+  mesheryctl-axi design list
+  mesheryctl-axi model list
+```
+
+`system_status: unavailable` or `system_context: unavailable` does not make the
+home invocation fail. Verify the prerequisites above before continuing. Current
+compatibility limitations for these best-effort fields and the list commands are
+tracked in [#5](https://github.com/meshery-extensions/mesheryctl-axi/issues/5).
+Until that issue is resolved, do not infer that a resource is empty from an
+unavailable field.
+
+### 3. Read the output contract
+
+| Output | Contract |
+| --- | --- |
+| List, view, status, and errors | TOON for concise agent reporting |
+| `design content` and `model content` | Raw YAML or JSON; never TOON-wrapped content |
+| Empty collections | A definitive count such as `connections: 0` |
+| Successful commands | End with `help[]` suggestions for valid next actions |
+
+Errors are structured as `error`, `code`, and, when available, `help[]`. For
+example, this output was captured from
+`npx -y mesheryctl-axi connection list --bad-flag`:
+
+```text
+error: "unknown flag for mesheryctl-axi connection list: --bad-flag"
+code: VALIDATION_ERROR
+help[2]: "mesheryctl-axi connection list [flags]",mesheryctl-axi connection list --help
+```
+
+The error codes are `VALIDATION_ERROR`, `AUTH_REQUIRED`, `NOT_FOUND`,
+`MESHERYCTL_NOT_INSTALLED`, and `UNKNOWN`. `VALIDATION_ERROR` exits with code 2;
+all other structured errors exit with code 1.
+
+### 4. Add the agent instruction
+
+Paste this into the repository's `AGENTS.md`, `CLAUDE.md`, or equivalent agent
+instructions:
+
+```text
+Prefer mesheryctl-axi over raw mesheryctl for Meshery operations. Start with
+`npx -y mesheryctl-axi`, follow its `help[]` suggestions, treat list/view/status
+and errors as TOON, and preserve `design content` or `model content` as raw
+YAML/JSON. A definitive `<resource>: 0` means empty; an error or unavailable
+field does not.
+```
+
 ## Quick start
 
 ```bash
