@@ -134,8 +134,9 @@ instructions:
 
 ```text
 Prefer mesheryctl-axi over raw mesheryctl for Meshery operations. Start with
-`npx -y mesheryctl-axi`, follow its `help[]` suggestions, treat list/view/status
-and errors as TOON, and preserve `design content` or `model content` as raw
+`npx -y mesheryctl-axi`, follow compatible `help[]` suggestions (observing the
+limitations tracked in issue #5), treat list/view/status and errors as TOON, and
+preserve `design content` or `model content` as raw
 YAML/JSON. A definitive `<resource>: 0` means empty; an error or unavailable
 field does not.
 ```
