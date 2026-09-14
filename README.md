@@ -97,17 +97,23 @@ help[4]:
 `system_status: unavailable` or `system_context: unavailable` does not make the
 home invocation fail. Verify the prerequisites above before continuing. With the
 currently released `mesheryctl` v1.0.69, the `connection list`, `design list`,
-and `model list` suggestions are unavailable because the CLI rejects the JSON
-output format used by the wrapper. This limitation is tracked in
-[#5](https://github.com/meshery-extensions/mesheryctl-axi/issues/5); do not execute
-those three suggestions until it is resolved, and do not infer that a resource is
-empty from an unavailable field.
+`model list`, and `component list` suggestions are unavailable because the CLI
+rejects the JSON output format used by the wrapper. This limitation is tracked
+in [#5](https://github.com/meshery-extensions/mesheryctl-axi/issues/5); do not
+execute those four suggestions until it is resolved, and do not infer that a
+resource is empty from an unavailable field.
+
+`system status` and `system context` remain usable, but v1.0.69 does not support
+their requested JSON format. The wrapper therefore falls back to TOON containing
+one truncated raw-text field—`system_status` or `system_context`—instead of the
+full structured status or context schema.
 
 ### 3. Read the output contract
 
 | Output | Contract |
 | --- | --- |
-| List, view, status, and errors | TOON for concise agent reporting |
+| Compatible list/view reporting and errors | TOON for concise agent reporting |
+| `system status` and `system context` | Structured TOON when JSON is supported; otherwise one truncated raw-text field |
 | `design content` and `model content` | Raw YAML or JSON; never TOON-wrapped content |
 | Empty collections | A definitive count such as `connections: 0` |
 | Successful reporting commands | End with `help[]` suggestions for valid next actions |
@@ -147,15 +153,15 @@ field does not.
 # Content-first home: description, bin path, best-effort system status/context
 npx -y mesheryctl-axi
 
-# TOON list/view reporting
+# System reporting (v1.0.69 returns a single raw-text fallback field)
 npx -y mesheryctl-axi system status
 npx -y mesheryctl-axi system context
-npx -y mesheryctl-axi component list
 
 # Currently unavailable with mesheryctl v1.0.69; tracked in issue #5
 # npx -y mesheryctl-axi connection list
 # npx -y mesheryctl-axi design list
 # npx -y mesheryctl-axi model list
+# npx -y mesheryctl-axi component list
 
 # Schema-faithful content retrieve (YAML/JSON - never TOON-as-content)
 npx -y mesheryctl-axi design content <name> --format yaml
@@ -166,7 +172,8 @@ npx -y mesheryctl-axi model content <name> --format json
 
 | Concern | Behavior |
 | --- | --- |
-| List / view metadata | TOON |
+| Compatible list / view metadata | TOON |
+| System status / context fallback | One truncated raw-text TOON field when JSON is unsupported |
 | Design / model **content** | Raw YAML or JSON only |
 | Unknown flags | Non-zero exit + structured TOON error |
 | Empty results | Definitive empty states (e.g. `connections: 0`) |
