@@ -58,9 +58,12 @@ mesheryctl system login
 mesheryctl system context view
 ```
 
-If `mesheryctl` is installed outside `PATH`, point the wrapper to the executable:
+If `mesheryctl` is installed outside `PATH`, use its absolute path for
+authentication and set `MESHERYCTL_BIN` when invoking the wrapper:
 
 ```bash
+/absolute/path/to/mesheryctl system login
+/absolute/path/to/mesheryctl system context view
 MESHERYCTL_BIN=/absolute/path/to/mesheryctl npx -y mesheryctl-axi
 ```
 
@@ -73,8 +76,9 @@ npx -y mesheryctl-axi
 ```
 
 It reports the wrapper's purpose, best-effort Meshery system information, and a
-`help[]` list of supported next actions. Treat `help[]` as executable guidance:
-choose a listed command instead of inventing a subcommand or flag.
+`help[]` list of intended next actions. Choose listed command shapes instead of
+inventing subcommands or flags, but observe the compatibility limitation below
+before executing a suggestion.
 
 The following output was captured from the current v0.1.0 command. The
 environment-specific `bin` path is omitted:
@@ -91,11 +95,13 @@ help[4]:
 ```
 
 `system_status: unavailable` or `system_context: unavailable` does not make the
-home invocation fail. Verify the prerequisites above before continuing. Current
-compatibility limitations for these best-effort fields and the list commands are
-tracked in [#5](https://github.com/meshery-extensions/mesheryctl-axi/issues/5).
-Until that issue is resolved, do not infer that a resource is empty from an
-unavailable field.
+home invocation fail. Verify the prerequisites above before continuing. With the
+currently released `mesheryctl` v1.0.69, the `connection list`, `design list`,
+and `model list` suggestions are unavailable because the CLI rejects the JSON
+output format used by the wrapper. This limitation is tracked in
+[#5](https://github.com/meshery-extensions/mesheryctl-axi/issues/5); do not execute
+those three suggestions until it is resolved, and do not infer that a resource is
+empty from an unavailable field.
 
 ### 3. Read the output contract
 
@@ -104,7 +110,8 @@ unavailable field.
 | List, view, status, and errors | TOON for concise agent reporting |
 | `design content` and `model content` | Raw YAML or JSON; never TOON-wrapped content |
 | Empty collections | A definitive count such as `connections: 0` |
-| Successful commands | End with `help[]` suggestions for valid next actions |
+| Successful reporting commands | End with `help[]` suggestions for valid next actions |
+| Successful `design content` and `model content` commands | Return only raw YAML or JSON; no `help[]` block |
 
 Errors are structured as `error`, `code`, and, when available, `help[]`. For
 example, this output was captured from
@@ -140,12 +147,14 @@ field does not.
 npx -y mesheryctl-axi
 
 # TOON list/view reporting
-npx -y mesheryctl-axi connection list
 npx -y mesheryctl-axi system status
 npx -y mesheryctl-axi system context
-npx -y mesheryctl-axi design list
-npx -y mesheryctl-axi model list
 npx -y mesheryctl-axi component list
+
+# Currently unavailable with mesheryctl v1.0.69; tracked in issue #5
+# npx -y mesheryctl-axi connection list
+# npx -y mesheryctl-axi design list
+# npx -y mesheryctl-axi model list
 
 # Schema-faithful content retrieve (YAML/JSON - never TOON-as-content)
 npx -y mesheryctl-axi design content <name> --format yaml
@@ -160,7 +169,8 @@ npx -y mesheryctl-axi model content <name> --format json
 | Design / model **content** | Raw YAML or JSON only |
 | Unknown flags | Non-zero exit + structured TOON error |
 | Empty results | Definitive empty states (e.g. `connections: 0`) |
-| Success | Includes `help[]` suggestions |
+| Reporting command success | Includes `help[]` suggestions |
+| Design / model content success | Returns raw content without `help[]` |
 | Interactivity | Always non-interactive (no TTY prompts) |
 
 ## Commands (v1)
