@@ -21,24 +21,21 @@ alt="Meshery Logo" width="50%" /></picture></a></p>
 
 Agent-ergonomic [AXI](https://axi.md/) wrapper around [`mesheryctl`](https://docs.meshery.io/reference/mesheryctl). Prefer this over raw `mesheryctl` for agent workflows: token-efficient **TOON** list/view reporting, definitive empty states, structured errors, `help[]` next-step suggestions, and always-non-interactive execution.
 
-It follows the [`gh-axi`](https://github.com/kunchenguid/gh-axi) pattern: it wraps the human CLI instead of changing it. Design and scope: [meshery/meshery#20979](https://github.com/meshery/meshery/issues/20979).
 
-Current pre-release usage runs directly from the source checkout:
+_The original design and scope [meshery/meshery#20979](https://github.com/meshery/meshery/issues/20979) follows the [`gh-axi`](https://github.com/kunchenguid/gh-axi) pattern by wrapping the human CLI instead of changing it._
 
-```bash
-make setup
-make dev
-```
-
-After the first npm release, the equivalent package command will be:
+To use:
 
 ```bash
 npx -y mesheryctl-axi
 ```
 
-## Project status
 
-**Pre-release (v0.x).** The package structure, error contract, TOON rendering, and release pipeline are in place. List commands use the authenticated Meshery Server API while `mesheryctl` list output remains human-oriented; view and content commands continue to use the CLI's supported structured output. [#12](https://github.com/meshery-extensions/mesheryctl-axi/issues/12) tracks everything left before the first npm release. Issues labelled [`good first issue`](https://github.com/meshery-extensions/mesheryctl-axi/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22) are a good place to start.
+## Contributing
+
+### _Current Project Status_
+
+**Pre-release (v0.1.0).** The package structure, error contract, TOON rendering, and release pipeline are in place. List commands use the authenticated Meshery Server API while `mesheryctl` list output remains human-oriented; view and content commands continue to use the CLI's supported structured output. [#12](https://github.com/meshery-extensions/mesheryctl-axi/issues/12) tracks everything left before the first npm release. Issues labelled [`good first issue`](https://github.com/meshery-extensions/mesheryctl-axi/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22) are a good place to start.
 
 ## Prerequisites
 
@@ -49,8 +46,7 @@ npx -y mesheryctl-axi
 
 ## Agent quickstart
 
-Use this sequence when setting up an agent or preparing a machine for an agent
-to operate Meshery.
+Use this sequence when setting up an agent or preparing a machine for an agent to operate Meshery.
 
 ### 1. Prepare the environment
 
