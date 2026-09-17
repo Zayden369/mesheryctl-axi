@@ -23,6 +23,15 @@ Agent-ergonomic [AXI](https://axi.md/) wrapper around [`mesheryctl`](https://doc
 
 It follows the [`gh-axi`](https://github.com/kunchenguid/gh-axi) pattern: it wraps the human CLI instead of changing it. Design and scope: [meshery/meshery#20979](https://github.com/meshery/meshery/issues/20979).
 
+Current pre-release usage runs directly from the source checkout:
+
+```bash
+make setup
+make dev
+```
+
+After the first npm release, the equivalent package command will be:
+
 ```bash
 npx -y mesheryctl-axi
 ```
@@ -64,7 +73,7 @@ CLI:
 ```bash
 /absolute/path/to/mesheryctl system login
 /absolute/path/to/mesheryctl system context view
-MESHERYCTL_BIN=/absolute/path/to/mesheryctl npx -y mesheryctl-axi
+MESHERYCTL_BIN=/absolute/path/to/mesheryctl make dev
 ```
 
 The wrapper reads the active context and token from the normal `mesheryctl`
@@ -73,10 +82,11 @@ or `MESHERYCTL_CONFIG` to its `config.yaml` path.
 
 ### 2. Start with the content-first home
 
-Make the no-argument command the agent's first call:
+During pre-release development, make the no-argument source command the
+agent's first call:
 
 ```bash
-npx -y mesheryctl-axi
+make dev
 ```
 
 The home command reads structured context fields from the authenticated
@@ -120,10 +130,10 @@ active context. They do not scrape tables or pass unsupported JSON flags to
 `mesheryctl`:
 
 ```bash
-npx -y mesheryctl-axi connection list
-npx -y mesheryctl-axi design list
-npx -y mesheryctl-axi model list
-npx -y mesheryctl-axi component list
+make dev ARGS="connection list"
+make dev ARGS="design list"
+make dev ARGS="model list"
+make dev ARGS="component list"
 ```
 
 A successful empty collection is definitive, for example `connections: 0`.
@@ -149,30 +159,34 @@ Paste this into the repository's `AGENTS.md`, `CLAUDE.md`, or equivalent agent
 instructions:
 
 ```text
-Prefer mesheryctl-axi over raw mesheryctl for Meshery operations. Start with
-`npx -y mesheryctl-axi` and follow its `help[]` suggestions. Treat list, view,
-system, and error output as TOON; preserve `design content` and `model content`
-as raw YAML or JSON. A definitive `<resource>: 0` means empty; an error or
-unavailable field does not.
+Prefer mesheryctl-axi over raw mesheryctl for Meshery operations. During
+pre-release development, run it from the source checkout with `make dev` and
+pass subcommands through `ARGS`, then follow its `help[]` suggestions. Treat
+list, view, system, and error output as TOON; preserve `design content` and
+`model content` as raw YAML or JSON. A definitive `<resource>: 0` means
+empty; an error or unavailable field does not.
 ```
 
 ## Quick start
 
+The package is not yet published to npm. Run these commands from the source
+checkout during pre-release development:
+
 ```bash
 # Content-first home: description, bin path, best-effort system status/context
-npx -y mesheryctl-axi
+make dev
 
 # TOON list/view reporting
-npx -y mesheryctl-axi connection list
-npx -y mesheryctl-axi system status
-npx -y mesheryctl-axi system context
-npx -y mesheryctl-axi design list
-npx -y mesheryctl-axi model list
-npx -y mesheryctl-axi component list
+make dev ARGS="connection list"
+make dev ARGS="system status"
+make dev ARGS="system context"
+make dev ARGS="design list"
+make dev ARGS="model list"
+make dev ARGS="component list"
 
-# Schema-faithful content retrieve (YAML/JSON - never TOON-as-content)
-npx -y mesheryctl-axi design content <name> --format yaml
-npx -y mesheryctl-axi model content <name> --format json
+# Schema-faithful content retrieval (YAML/JSON - never TOON-as-content)
+make dev ARGS="design content <name> --format yaml"
+make dev ARGS="model content <name> --format json"
 ```
 
 ## Design notes
