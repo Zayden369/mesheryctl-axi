@@ -23,6 +23,11 @@ Agent-ergonomic [AXI](https://axi.md/) wrapper around [`mesheryctl`](https://doc
 
 It follows the [`gh-axi`](https://github.com/kunchenguid/gh-axi) pattern: it wraps the human CLI instead of changing it. Design and scope: [meshery/meshery#20979](https://github.com/meshery/meshery/issues/20979).
 
+Package locations:
+
+- [npm package page](https://www.npmjs.com/package/mesheryctl-axi)
+- [npm registry metadata](https://registry.npmjs.org/mesheryctl-axi)
+
 Current pre-release usage runs directly from the source checkout:
 
 ```bash
