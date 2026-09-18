@@ -19,7 +19,9 @@ alt="Meshery Logo" width="50%" /></picture></a></p>
 
 # mesheryctl-axi
 
-Agent-ergonomic [AXI](https://axi.md/) wrapper around [`mesheryctl`](https://docs.meshery.io/reference/mesheryctl). Prefer this over raw `mesheryctl` for agent workflows: token-efficient **TOON** list/view reporting, definitive empty states, structured errors, `help[]` next-step suggestions, and always-non-interactive execution.
+Agent-ergonomic [AXI](https://axi.md/) wrapper around [`mesheryctl`](https://docs.meshery.io/reference/mesheryctl). Prefer this over raw `mesheryctl` for agent workflows: token-efficient [**TOON**](https://toonformat.dev/) list/view reporting, definitive empty states, structured errors, `help[]` next-step suggestions, and always-non-interactive execution.
+
+Reporting in [TOON](https://toonformat.dev/) — a token-efficient serialization for tabular data — is a founding reason this wrapper exists: agents spend most of their Meshery tokens reading repeated list/view output, so the wrapper reshapes that reporting while leaving design and model content in canonical YAML/JSON.
 
 
 _The original design and scope [meshery/meshery#20979](https://github.com/meshery/meshery/issues/20979) follows the [`gh-axi`](https://github.com/kunchenguid/gh-axi) pattern by wrapping the human CLI instead of changing it._
@@ -133,8 +135,8 @@ must not be interpreted as empty results.
 
 | Output | Contract |
 | --- | --- |
-| List, view, system, and error reporting | TOON for concise agent use |
-| `design content` and `model content` | Raw YAML or JSON; never TOON-wrapped content |
+| List, view, system, and error reporting | [TOON](https://toonformat.dev/) for concise agent use |
+| `design content` and `model content` | Raw YAML or JSON; never [TOON](https://toonformat.dev/)-wrapped content |
 | Empty collections | A definitive count such as `connections: 0` |
 | Successful reporting commands | End with contextual `help[]` suggestions |
 | Successful content commands | Return only raw YAML or JSON, without `help[]` |
@@ -170,7 +172,7 @@ Run these commands from the source checkout during pre-release development:
 # Content-first home: description, bin path, best-effort system status/context
 make dev
 
-# TOON list/view reporting
+# TOON (https://toonformat.dev/) list/view reporting
 make dev ARGS="connection list"
 make dev ARGS="system status"
 make dev ARGS="system context"
@@ -178,7 +180,7 @@ make dev ARGS="design list"
 make dev ARGS="model list"
 make dev ARGS="component list"
 
-# Schema-faithful content retrieval (YAML/JSON - never TOON-as-content)
+# Schema-faithful content retrieval (YAML/JSON - never TOON-as-content; see https://toonformat.dev/)
 make dev ARGS="design content <name> --format yaml"
 make dev ARGS="model content <name> --format json"
 ```
@@ -187,9 +189,9 @@ make dev ARGS="model content <name> --format json"
 
 | Concern | Behavior |
 | --- | --- |
-| List / view / system metadata | TOON |
+| List / view / system metadata | [TOON](https://toonformat.dev/) |
 | Design / model **content** | Raw YAML or JSON only; no `help[]` suffix |
-| Unknown flags | Non-zero exit + structured TOON error |
+| Unknown flags | Non-zero exit + structured [TOON](https://toonformat.dev/) error |
 | Empty results | Definitive empty states (e.g. `connections: 0`) |
 | Reporting success | Includes contextual `help[]` suggestions |
 | Interactivity | Always non-interactive (no TTY prompts) |
