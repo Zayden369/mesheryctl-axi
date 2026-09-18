@@ -8,7 +8,9 @@ import {
   renderError,
   renderHelp,
   renderList,
+  renderListCounts,
   renderOutput,
+  renderStatusSummary,
 } from "../src/toon.js";
 
 describe("TOON encoding", () => {
@@ -31,13 +33,19 @@ describe("TOON encoding", () => {
   });
 
   it("renderDetail encodes a single object as TOON", () => {
-    const toon = renderDetail(
-      "connection",
-      { id: "x", name: "y" },
-      [field("id"), field("name")],
-    );
+    const toon = renderDetail("connection", { id: "x", name: "y" }, [
+      field("id"),
+      field("name"),
+    ]);
     expect(toon).toContain("connection");
     expect(toon).toContain("x");
+  });
+
+  it("renders list counts and deterministic status summaries", () => {
+    expect(renderListCounts(2, 8)).toBe("count: 2\ntotal: 8");
+    expect(renderStatusSummary({ discovered: 1, connected: 2 })).toBe(
+      "status:\n  connected: 2\n  discovered: 1",
+    );
   });
 
   it("renderError produces structured TOON error", () => {

@@ -1,8 +1,14 @@
 import { getFlag, getPositional, rejectUnknownFlags } from "../args.js";
 import { AxiError } from "../errors.js";
+import { selectFields } from "../fields.js";
 import { asObject, mesheryctlExec, mesheryctlJson } from "../mesheryctl.js";
 import { API } from "../paths.js";
-import { listQueryFromFlags, serverGetJson } from "../server.js";
+import {
+  listQueryFromFlags,
+  listTotal,
+  nextPage,
+  serverGetJson,
+} from "../server.js";
 import { getSuggestions } from "../suggestions.js";
 import {
   emptyState,
@@ -10,13 +16,14 @@ import {
   renderDetail,
   renderHelp,
   renderList,
+  renderListCounts,
   renderOutput,
   type FieldDef,
 } from "../toon.js";
 
 export const DESIGN_FLAGS: Record<string, readonly string[]> = {
-  list: ["--page", "--pagesize", "--limit"],
-  view: [],
+  list: ["--page", "--pagesize", "--limit", "--fields", "--full"],
+  view: ["--fields", "--full"],
   content: ["--format"],
 };
 
@@ -24,7 +31,9 @@ export const DESIGN_HELP = `usage: mesheryctl-axi design <subcommand>
 subcommands[3]:
   list, view, content
 flags{list}:
-  --page, --pagesize, --limit
+  --page, --pagesize, --limit, --fields, --full
+flags{view}:
+  --fields, --full
 flags{content}:
   --format yaml|json (default yaml)
 notes:
@@ -60,7 +69,9 @@ export function designViewArgv(name: string, format: string): string[] {
   return ["design", "view", name, "--output-format", format];
 }
 
-function normalizeDesign(item: Record<string, unknown>): Record<string, unknown> {
+function normalizeDesign(
+  item: Record<string, unknown>,
+): Record<string, unknown> {
   const user = item["user_id"] ?? item["userID"] ?? item["UserID"];
   return {
     id: item["id"] ?? item["ID"],
@@ -73,6 +84,7 @@ function normalizeDesign(item: Record<string, unknown>): Record<string, unknown>
 }
 
 async function listDesigns(args: string[]): Promise<string> {
+  const schema = selectFields(args, listSchema, viewSchema, "design list");
   // Interim Server API — mesheryctl design list has no --output-format.
   const q = listQueryFromFlags({
     page: getFlag(args, "--page"),
@@ -89,14 +101,26 @@ async function listDesigns(args: string[]): Promise<string> {
       : [];
   const items = raw.map(normalizeDesign);
   const isEmpty = items.length === 0;
+  const total = listTotal(payload);
   return renderOutput([
-    isEmpty ? emptyState("designs") : renderList("designs", items, listSchema),
-    renderHelp(getSuggestions({ domain: "design", action: "list", isEmpty })),
+    renderListCounts(items.length, total),
+    isEmpty ? emptyState("designs") : renderList("designs", items, schema),
+    renderHelp(
+      getSuggestions({
+        domain: "design",
+        action: "list",
+        isEmpty,
+        nextPage: nextPage(q.page, q.pagesize, items.length, total),
+        nextPageFlags:
+          q.pagesize === 10 ? [] : ["--pagesize", String(q.pagesize)],
+      }),
+    ),
   ]);
 }
 
 async function viewDesign(args: string[]): Promise<string> {
-  const name = getPositional(args, 0);
+  const schema = selectFields(args, viewSchema, viewSchema, "design view");
+  const name = getPositional(args, 0, ["--fields"]);
   if (!name) {
     throw new AxiError(
       "Design name is required: mesheryctl-axi design view <name>",
@@ -105,13 +129,13 @@ async function viewDesign(args: string[]): Promise<string> {
   }
   const payload = await mesheryctlJson(designViewArgv(name, "json"));
   return renderOutput([
-    renderDetail("design", normalizeDesign(asObject(payload)), viewSchema),
+    renderDetail("design", normalizeDesign(asObject(payload)), schema),
     renderHelp(getSuggestions({ domain: "design", action: "view" })),
   ]);
 }
 
 async function contentDesign(args: string[]): Promise<string> {
-  const name = getPositional(args, 0);
+  const name = getPositional(args, 0, ["--format"]);
   if (!name) {
     throw new AxiError(
       "Design name is required: mesheryctl-axi design content <name> [--format yaml|json]",
@@ -142,16 +166,17 @@ export async function designCommand(args: string[]): Promise<string> {
       rejectUnknownFlags(args.slice(1), DESIGN_FLAGS.view, "design", "view");
       return viewDesign(args.slice(1));
     case "content":
-      rejectUnknownFlags(args.slice(1), DESIGN_FLAGS.content, "design", "content");
+      rejectUnknownFlags(
+        args.slice(1),
+        DESIGN_FLAGS.content,
+        "design",
+        "content",
+      );
       return contentDesign(args.slice(1));
     default:
-      throw new AxiError(
-        `Unknown subcommand: ${sub}`,
-        "VALIDATION_ERROR",
-        [
-          "Available subcommands: list, view, content",
-          "mesheryctl-axi design --help",
-        ],
-      );
+      throw new AxiError(`Unknown subcommand: ${sub}`, "VALIDATION_ERROR", [
+        "Available subcommands: list, view, content",
+        "mesheryctl-axi design --help",
+      ]);
   }
 }

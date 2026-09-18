@@ -71,7 +71,182 @@ describe("connection list via Server API", () => {
     expect(calledUrl).toContain("pagesize=");
     expect(out).toContain("connections");
     expect(out).toContain("c1");
+    expect(out).toContain("count: 1");
+    expect(out).toContain("total: 1");
+    expect(out).toContain("status:");
+    expect(out).toContain("connected: 1");
     expect(out).toMatch(/help\[\d+\]:/);
+  });
+
+  it("uses source status aggregates and supports current camelCase metadata", async () => {
+    setServerAuth(fakeAuth);
+    setServerFetcher(async () =>
+      jsonResponse({
+        connections: [
+          { id: "c1", name: "one", status: "CONNECTED" },
+          { id: "c2", name: "two", status: "DISCOVERED" },
+        ],
+        totalCount: 8,
+        statusSummary: { connected: 6, discovered: 2 },
+      }),
+    );
+
+    const out = await connectionCommand(["list"]);
+    expect(out).toContain("count: 2");
+    expect(out).toContain("total: 8");
+    expect(out).toContain("connected: 6");
+    expect(out).toContain("discovered: 2");
+  });
+
+  it("falls back to row statuses when a source summary mixes valid and invalid entries", async () => {
+    setServerAuth(fakeAuth);
+    setServerFetcher(async () =>
+      jsonResponse({
+        connections: [
+          { id: "c1", status: "CONNECTED" },
+          { id: "c2", status: "CONNECTED" },
+        ],
+        statusSummary: { connected: 6, bogus: "n/a" },
+      }),
+    );
+
+    const out = await connectionCommand(["list"]);
+    expect(out).toContain("status:\n  connected: 2");
+  });
+
+  it("falls back to row statuses when a source summary has non-numeric counts", async () => {
+    setServerAuth(fakeAuth);
+    setServerFetcher(async () =>
+      jsonResponse({
+        connections: [
+          { id: "c1", status: "CONNECTED" },
+          { id: "c2", status: "DISCOVERED" },
+        ],
+        statusSummary: { connected: true, discovered: null },
+      }),
+    );
+
+    const out = await connectionCommand(["list"]);
+    expect(out).toContain("status:\n  connected: 1\n  discovered: 1");
+  });
+
+  it("falls back to row statuses when a source summary has fractional counts", async () => {
+    setServerAuth(fakeAuth);
+    setServerFetcher(async () =>
+      jsonResponse({
+        connections: [{ id: "c1", status: "CONNECTED" }],
+        statusSummary: { connected: 1.5 },
+      }),
+    );
+
+    const out = await connectionCommand(["list"]);
+    expect(out).toContain("status:\n  connected: 1");
+  });
+
+  it("falls back to row statuses when a source summary is empty", async () => {
+    setServerAuth(fakeAuth);
+    setServerFetcher(async () =>
+      jsonResponse({
+        connections: [
+          { id: "c1", status: "CONNECTED" },
+          { id: "c2", status: "connected" },
+        ],
+        statusSummary: {},
+      }),
+    );
+
+    const out = await connectionCommand(["list"]);
+    expect(out).toContain("status:\n  connected: 2");
+  });
+
+  it("limits columns with --fields and expands the known schema with --full", async () => {
+    setServerAuth(fakeAuth);
+    setServerFetcher(async () =>
+      jsonResponse({
+        connections: [
+          {
+            id: "c1",
+            name: "k8s",
+            status: "connected",
+            kind: "kubernetes",
+            type: "platform",
+            createdAt: "2026-09-18",
+            updatedAt: "2026-09-19",
+          },
+        ],
+        totalCount: 1,
+      }),
+    );
+
+    const selected = await connectionCommand(["list", "--fields", "id,name"]);
+    expect(selected).toContain("connections[1]{id,name}");
+    expect(selected).not.toContain("{id,name,status,kind,type}");
+
+    const full = await connectionCommand(["list", "--full"]);
+    expect(full).toContain("created");
+    expect(full).toContain("updated");
+  });
+
+  it("rejects unknown fields before making a request and lists valid fields", async () => {
+    let fetched = false;
+    setServerFetcher(async () => {
+      fetched = true;
+      return jsonResponse({ connections: [] });
+    });
+
+    await expect(
+      connectionCommand(["list", "--fields", "bogus"]),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      suggestions: [expect.stringContaining("id, name, status, kind, type")],
+    });
+    expect(fetched).toBe(false);
+  });
+
+  it("forwards repeatable long and short connection filters", async () => {
+    setServerAuth(fakeAuth);
+    let calledUrl = "";
+    setServerFetcher(async (url) => {
+      calledUrl = url;
+      return jsonResponse({ connections: [], totalCount: 0 });
+    });
+
+    await connectionCommand([
+      "list",
+      "--kind",
+      "kubernetes",
+      "-k=meshery",
+      "-s",
+      "connected,discovered",
+    ]);
+
+    const query = new URL(calledUrl).searchParams;
+    expect(query.getAll("kind")).toEqual(["kubernetes", "meshery"]);
+    expect(query.getAll("status")).toEqual(["connected", "discovered"]);
+  });
+
+  it("suggests the next page only when a full page has more results", async () => {
+    setServerAuth(fakeAuth);
+    setServerFetcher(async () =>
+      jsonResponse({
+        connections: Array.from({ length: 2 }, (_, index) => ({
+          id: `c${index}`,
+          name: `connection-${index}`,
+        })),
+        totalCount: 3,
+      }),
+    );
+
+    const out = await connectionCommand([
+      "list",
+      "--pagesize",
+      "2",
+      "--kind",
+      "kubernetes",
+    ]);
+    expect(out).toContain(
+      "mesheryctl-axi connection list --page 2 --pagesize 2 --kind kubernetes",
+    );
   });
 
   it("definitive empty state", async () => {
@@ -112,6 +287,25 @@ describe("connection list via Server API", () => {
     const out = await connectionCommand(["view", "c1"]);
     expect(out).toContain("connection");
     expect(out).toMatch(/help\[\d+\]:/);
+  });
+
+  it("applies --fields to view and accepts flags before the id", async () => {
+    setMesheryctlRunner(async (_bin, args) => {
+      expect(args).toEqual([
+        "connection",
+        "view",
+        "c1",
+        "--output-format",
+        "json",
+      ]);
+      return ok(JSON.stringify({ id: "c1", name: "k8s", kind: "kubernetes" }));
+    });
+
+    const out = await connectionCommand(["view", "--fields", "id,name", "c1"]);
+    expect(out).toContain("connection:");
+    expect(out).toContain("id: c1");
+    expect(out).toContain("name: k8s");
+    expect(out).not.toContain("kind: kubernetes");
   });
 });
 
@@ -170,6 +364,8 @@ describe("list commands use Server API (no --output-format spawn)", () => {
       throw new Error("should not spawn mesheryctl for design list");
     });
     const out = await designCommand(["list"]);
+    expect(out).toContain("count: 0");
+    expect(out).toContain("total: 0");
     expect(out).toContain("designs: 0");
     expect(out).toMatch(/help\[\d+\]:/);
   });
@@ -181,6 +377,7 @@ describe("list commands use Server API (no --output-format spawn)", () => {
       return jsonResponse({ models: [], total_count: 0 });
     });
     const out = await modelCommand(["list"]);
+    expect(out).toContain("count: 0");
     expect(out).toContain("models: 0");
   });
 
@@ -191,6 +388,7 @@ describe("list commands use Server API (no --output-format spawn)", () => {
       return jsonResponse({ components: [], total_count: 0 });
     });
     const out = await componentCommand(["list"]);
+    expect(out).toContain("count: 0");
     expect(out).toContain("components: 0");
   });
 });
@@ -218,22 +416,22 @@ describe("system status/context", () => {
     // writing is not needed if we call with mocked load  -  use server auth path via
     // temporarily setting env and a temp config in a dedicated test file.
     // Here: ensure command rejects unknown flags and help works.
-    await expect(
-      systemCommand(["context", "--bogus"]),
-    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(systemCommand(["context", "--bogus"])).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
   });
 });
 
 describe("MESHERYCTL_INCOMPATIBLE", () => {
   it("maps unknown flag to MESHERYCTL_INCOMPATIBLE", () => {
-    const err = mapMesheryctlError('Error: unknown flag: --output-format', 1);
+    const err = mapMesheryctlError("Error: unknown flag: --output-format", 1);
     expect(err).toBeInstanceOf(AxiError);
     expect(err.code).toBe("MESHERYCTL_INCOMPATIBLE");
     expect(err.suggestions.join(" ")).toMatch(/v1\.0\.69/);
   });
 
   it("maps unknown command similarly", () => {
-    const err = mapMesheryctlError("Error: unknown command \"exp\"", 1);
+    const err = mapMesheryctlError('Error: unknown command "exp"', 1);
     expect(err.code).toBe("MESHERYCTL_INCOMPATIBLE");
   });
 });
@@ -246,14 +444,14 @@ describe("unknown flags non-zero path via commands", () => {
   });
 
   it("model view unknown flag", async () => {
-    await expect(
-      modelCommand(["view", "x", "--weird"]),
-    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(modelCommand(["view", "x", "--weird"])).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
   });
 
   it("component list unknown flag", async () => {
-    await expect(
-      componentCommand(["list", "--nope"]),
-    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(componentCommand(["list", "--nope"])).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
   });
 });

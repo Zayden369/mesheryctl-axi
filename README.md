@@ -124,6 +124,9 @@ active context. They do not scrape tables or pass unsupported JSON flags to
 
 ```bash
 make dev ARGS="connection list"
+make dev ARGS="connection list --kind kubernetes --status connected"
+make dev ARGS="connection list --fields id,name"
+make dev ARGS="connection list --full"
 make dev ARGS="design list"
 make dev ARGS="model list"
 make dev ARGS="component list"
@@ -138,6 +141,8 @@ must not be interpreted as empty results.
 | List, view, system, and error reporting | [TOON](https://toonformat.dev/) for concise agent use |
 | `design content` and `model content` | Raw YAML or JSON; never [TOON](https://toonformat.dev/)-wrapped content |
 | Empty collections | A definitive count such as `connections: 0` |
+| List aggregates | Current-page `count`, source `total` when available, and a connection status breakdown |
+| Field control | `--fields <field,...>` selects known fields; `--full` uses the full known schema |
 | Successful reporting commands | End with contextual `help[]` suggestions |
 | Successful content commands | Return only raw YAML or JSON, without `help[]` |
 

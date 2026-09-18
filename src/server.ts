@@ -3,7 +3,7 @@ import { loadMesheryAuth, type ResolvedMesheryAuth } from "./config.js";
 
 export type ServerGetOptions = {
   path: string;
-  query?: Record<string, string | number | undefined>;
+  query?: Record<string, string | number | readonly string[] | undefined>;
   /** Skip auth cookies (e.g. /api/system/version). */
   anonymous?: boolean;
   auth?: ResolvedMesheryAuth;
@@ -30,18 +30,52 @@ export function setServerAuth(auth: ResolvedMesheryAuth | undefined): void {
 function buildUrl(
   endpoint: string,
   path: string,
-  query?: Record<string, string | number | undefined>,
+  query?: Record<string, string | number | readonly string[] | undefined>,
 ): string {
   const base = endpoint.replace(/\/$/, "");
   const rel = path.replace(/^\//, "");
   const url = new URL(`${base}/${rel}`);
   if (query) {
     for (const [k, v] of Object.entries(query)) {
-      if (v === undefined || v === "") continue;
-      url.searchParams.set(k, String(v));
+      if (Array.isArray(v)) {
+        for (const item of v) {
+          if (item !== "") url.searchParams.append(k, item);
+        }
+      } else if (v !== undefined && v !== "") {
+        url.searchParams.set(k, String(v));
+      }
     }
   }
   return url.toString();
+}
+
+/** Read pagination total from current and legacy Meshery response envelopes. */
+export function listTotal(
+  payload: Record<string, unknown>,
+): number | undefined {
+  const value =
+    payload["totalCount"] ?? payload["total_count"] ?? payload["total"];
+  if (
+    typeof value !== "number" &&
+    (typeof value !== "string" || value.trim() === "")
+  ) {
+    return undefined;
+  }
+  const total = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(total) && total >= 0 ? total : undefined;
+}
+
+/** Determine whether a list response has another page. */
+export function nextPage(
+  page: number,
+  pageSize: number,
+  itemCount: number,
+  total?: number,
+): number | undefined {
+  const fullPage = itemCount === pageSize;
+  const hasMore =
+    fullPage && (total === undefined || (page + 1) * pageSize < total);
+  return hasMore ? page + 2 : undefined;
 }
 
 /**
@@ -137,6 +171,9 @@ export function listQueryFromFlags(args: {
     : 0;
   return {
     page,
-    pagesize: Number.isFinite(pagesize) && pagesize > 0 ? pagesize : 10,
+    // Meshery Server caps pageSize at 100; mirror that so next-page detection
+    // uses the page size the server actually applied.
+    pagesize:
+      Number.isFinite(pagesize) && pagesize > 0 ? Math.min(pagesize, 100) : 10,
   };
 }

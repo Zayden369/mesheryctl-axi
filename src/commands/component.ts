@@ -1,8 +1,14 @@
 import { getFlag, getPositional, rejectUnknownFlags } from "../args.js";
 import { AxiError } from "../errors.js";
+import { selectFields } from "../fields.js";
 import { asObject, mesheryctlJson } from "../mesheryctl.js";
 import { API } from "../paths.js";
-import { listQueryFromFlags, serverGetJson } from "../server.js";
+import {
+  listQueryFromFlags,
+  listTotal,
+  nextPage,
+  serverGetJson,
+} from "../server.js";
 import { getSuggestions } from "../suggestions.js";
 import {
   emptyState,
@@ -10,20 +16,23 @@ import {
   renderDetail,
   renderHelp,
   renderList,
+  renderListCounts,
   renderOutput,
   type FieldDef,
 } from "../toon.js";
 
 export const COMPONENT_FLAGS: Record<string, readonly string[]> = {
-  list: ["--page", "--pagesize", "--limit"],
-  view: [],
+  list: ["--page", "--pagesize", "--limit", "--fields", "--full"],
+  view: ["--fields", "--full"],
 };
 
 export const COMPONENT_HELP = `usage: mesheryctl-axi component <subcommand>
 subcommands[2]:
   list, view
 flags{list}:
-  --page, --pagesize, --limit
+  --page, --pagesize, --limit, --fields, --full
+flags{view}:
+  --fields, --full
 examples:
   mesheryctl-axi component list
   mesheryctl-axi component view <name>
@@ -52,7 +61,9 @@ export function componentViewArgv(name: string, format: string): string[] {
   return ["component", "view", name, "--output-format", format];
 }
 
-function normalizeComponent(item: Record<string, unknown>): Record<string, unknown> {
+function normalizeComponent(
+  item: Record<string, unknown>,
+): Record<string, unknown> {
   const model = item["model"];
   const modelName =
     typeof model === "object" && model !== null
@@ -66,7 +77,11 @@ function normalizeComponent(item: Record<string, unknown>): Record<string, unkno
       ? (component as Record<string, unknown>)["version"]
       : undefined);
   return {
-    name: item["name"] ?? item["displayName"] ?? item["DisplayName"] ?? item["Name"],
+    name:
+      item["name"] ??
+      item["displayName"] ??
+      item["DisplayName"] ??
+      item["Name"],
     kind: item["kind"] ?? item["Kind"],
     model: modelName,
     version,
@@ -75,6 +90,7 @@ function normalizeComponent(item: Record<string, unknown>): Record<string, unkno
 }
 
 async function listComponents(args: string[]): Promise<string> {
+  const schema = selectFields(args, listSchema, viewSchema, "component list");
   const q = listQueryFromFlags({
     page: getFlag(args, "--page"),
     pagesize: getFlag(args, "--pagesize") ?? getFlag(args, "--limit"),
@@ -88,18 +104,28 @@ async function listComponents(args: string[]): Promise<string> {
     : [];
   const items = raw.map(normalizeComponent);
   const isEmpty = items.length === 0;
+  const total = listTotal(payload);
   return renderOutput([
+    renderListCounts(items.length, total),
     isEmpty
       ? emptyState("components")
-      : renderList("components", items, listSchema),
+      : renderList("components", items, schema),
     renderHelp(
-      getSuggestions({ domain: "component", action: "list", isEmpty }),
+      getSuggestions({
+        domain: "component",
+        action: "list",
+        isEmpty,
+        nextPage: nextPage(q.page, q.pagesize, items.length, total),
+        nextPageFlags:
+          q.pagesize === 10 ? [] : ["--pagesize", String(q.pagesize)],
+      }),
     ),
   ]);
 }
 
 async function viewComponent(args: string[]): Promise<string> {
-  const name = getPositional(args, 0);
+  const schema = selectFields(args, viewSchema, viewSchema, "component view");
+  const name = getPositional(args, 0, ["--fields"]);
   if (!name) {
     throw new AxiError(
       "Component name is required: mesheryctl-axi component view <name>",
@@ -108,11 +134,7 @@ async function viewComponent(args: string[]): Promise<string> {
   }
   const payload = await mesheryctlJson(componentViewArgv(name, "json"));
   return renderOutput([
-    renderDetail(
-      "component",
-      normalizeComponent(asObject(payload)),
-      viewSchema,
-    ),
+    renderDetail("component", normalizeComponent(asObject(payload)), schema),
     renderHelp(getSuggestions({ domain: "component", action: "view" })),
   ]);
 }
@@ -124,19 +146,25 @@ export async function componentCommand(args: string[]): Promise<string> {
   }
   switch (sub) {
     case "list":
-      rejectUnknownFlags(args.slice(1), COMPONENT_FLAGS.list, "component", "list");
+      rejectUnknownFlags(
+        args.slice(1),
+        COMPONENT_FLAGS.list,
+        "component",
+        "list",
+      );
       return listComponents(args.slice(1));
     case "view":
-      rejectUnknownFlags(args.slice(1), COMPONENT_FLAGS.view, "component", "view");
+      rejectUnknownFlags(
+        args.slice(1),
+        COMPONENT_FLAGS.view,
+        "component",
+        "view",
+      );
       return viewComponent(args.slice(1));
     default:
-      throw new AxiError(
-        `Unknown subcommand: ${sub}`,
-        "VALIDATION_ERROR",
-        [
-          "Available subcommands: list, view",
-          "mesheryctl-axi component --help",
-        ],
-      );
+      throw new AxiError(`Unknown subcommand: ${sub}`, "VALIDATION_ERROR", [
+        "Available subcommands: list, view",
+        "mesheryctl-axi component --help",
+      ]);
   }
 }

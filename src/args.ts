@@ -11,13 +11,51 @@ export function getFlag(args: string[], name: string): string | undefined {
     const arg = args[i];
     if (arg === name) {
       if (i + 1 >= args.length) return undefined;
-      return args[i + 1];
+      return args[i + 1].startsWith("-") ? undefined : args[i + 1];
     }
     if (arg.startsWith(equalsPrefix)) {
       return arg.slice(equalsPrefix.length);
     }
   }
   return undefined;
+}
+
+/** Get all values for repeatable flags, including comma-separated values. */
+export function getFlagValues(
+  args: string[],
+  names: readonly string[],
+): string[] {
+  const values: string[] = [];
+  const nameSet = new Set(names);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (nameSet.has(arg)) {
+      const value = args[i + 1];
+      if (value !== undefined && !value.startsWith("-")) {
+        values.push(
+          ...value
+            .split(",")
+            .map((part) => part.trim())
+            .filter(Boolean),
+        );
+      }
+      continue;
+    }
+    for (const name of names) {
+      const prefix = flagEqualsPrefix(name);
+      if (arg.startsWith(prefix)) {
+        values.push(
+          ...arg
+            .slice(prefix.length)
+            .split(",")
+            .map((part) => part.trim())
+            .filter(Boolean),
+        );
+        break;
+      }
+    }
+  }
+  return values;
 }
 
 /** Check if a boolean flag is present. */
@@ -29,8 +67,14 @@ export function hasFlag(args: string[], flag: string): boolean {
 export function getPositional(
   args: string[],
   startIndex = 0,
+  valueFlags: readonly string[] = [],
 ): string | undefined {
   for (let i = startIndex; i < args.length; i++) {
+    if (valueFlags.includes(args[i])) {
+      i++;
+      continue;
+    }
+    if (valueFlags.some((flag) => args[i].startsWith(`${flag}=`))) continue;
     if (!args[i].startsWith("-")) return args[i];
   }
   return undefined;

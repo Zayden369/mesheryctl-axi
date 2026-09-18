@@ -6,7 +6,13 @@ import { encode } from "@toon-format/toon";
 export type FieldDef =
   | { type: "field"; key: string; as?: string }
   | { type: "pluck"; key: string; subkey: string; as?: string }
-  | { type: "joinArray"; key: string; subkey: string; as?: string; empty?: string }
+  | {
+      type: "joinArray";
+      key: string;
+      subkey: string;
+      as?: string;
+      empty?: string;
+    }
   | { type: "lower"; key: string; as?: string }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom extractors are polymorphic
   | { type: "custom"; as: string; fn: (item: any) => any };
@@ -77,7 +83,9 @@ export function extract(
         break;
       default: {
         const _exhaustive: never = def;
-        throw new Error(`Unknown field type: ${(_exhaustive as FieldDef).type}`);
+        throw new Error(
+          `Unknown field type: ${(_exhaustive as FieldDef).type}`,
+        );
       }
     }
   }
@@ -104,6 +112,19 @@ export function renderDetail(
 ): string {
   const extracted = extract(item, schema);
   return encode({ [label]: extracted });
+}
+
+/** Render current-page and source-reported list counts. */
+export function renderListCounts(count: number, total?: number): string {
+  return encode({ count, ...(total === undefined ? {} : { total }) });
+}
+
+/** Render a deterministic status aggregate. */
+export function renderStatusSummary(summary: Record<string, number>): string {
+  const sorted = Object.fromEntries(
+    Object.entries(summary).sort(([a], [b]) => a.localeCompare(b)),
+  );
+  return encode({ status: sorted });
 }
 
 /** Render help suggestions (manual formatting - encode() inlines primitive arrays). */

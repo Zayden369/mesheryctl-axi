@@ -1,8 +1,14 @@
 import { getFlag, getPositional, rejectUnknownFlags } from "../args.js";
 import { AxiError } from "../errors.js";
+import { selectFields } from "../fields.js";
 import { asObject, mesheryctlExec, mesheryctlJson } from "../mesheryctl.js";
 import { API } from "../paths.js";
-import { listQueryFromFlags, serverGetJson } from "../server.js";
+import {
+  listQueryFromFlags,
+  listTotal,
+  nextPage,
+  serverGetJson,
+} from "../server.js";
 import { getSuggestions } from "../suggestions.js";
 import {
   emptyState,
@@ -10,13 +16,14 @@ import {
   renderDetail,
   renderHelp,
   renderList,
+  renderListCounts,
   renderOutput,
   type FieldDef,
 } from "../toon.js";
 
 export const MODEL_FLAGS: Record<string, readonly string[]> = {
-  list: ["--page", "--pagesize", "--limit", "--count"],
-  view: [],
+  list: ["--page", "--pagesize", "--limit", "--count", "--fields", "--full"],
+  view: ["--fields", "--full"],
   content: ["--format"],
 };
 
@@ -24,7 +31,9 @@ export const MODEL_HELP = `usage: mesheryctl-axi model <subcommand>
 subcommands[3]:
   list, view, content
 flags{list}:
-  --page, --pagesize, --limit, --count
+  --page, --pagesize, --limit, --count, --fields, --full
+flags{view}:
+  --fields, --full
 flags{content}:
   --format yaml|json (default json)
 notes:
@@ -58,7 +67,9 @@ export function modelViewArgv(name: string, format: string): string[] {
   return ["model", "view", name, "--output-format", format];
 }
 
-function normalizeModel(item: Record<string, unknown>): Record<string, unknown> {
+function normalizeModel(
+  item: Record<string, unknown>,
+): Record<string, unknown> {
   const category = item["category"];
   const categoryName =
     typeof category === "object" && category !== null
@@ -69,12 +80,14 @@ function normalizeModel(item: Record<string, unknown>): Record<string, unknown> 
     name: item["name"] ?? item["Name"],
     version: item["version"] ?? item["Version"],
     category: categoryName,
-    displayname: item["displayname"] ?? item["displayName"] ?? item["DisplayName"],
+    displayname:
+      item["displayname"] ?? item["displayName"] ?? item["DisplayName"],
     registrant: item["registrant"] ?? item["Registrant"],
   };
 }
 
 async function listModels(args: string[]): Promise<string> {
+  const schema = selectFields(args, listSchema, viewSchema, "model list");
   const q = listQueryFromFlags({
     page: getFlag(args, "--page"),
     pagesize: getFlag(args, "--pagesize") ?? getFlag(args, "--limit"),
@@ -88,14 +101,26 @@ async function listModels(args: string[]): Promise<string> {
     : [];
   const items = raw.map(normalizeModel);
   const isEmpty = items.length === 0;
+  const total = listTotal(payload);
   return renderOutput([
-    isEmpty ? emptyState("models") : renderList("models", items, listSchema),
-    renderHelp(getSuggestions({ domain: "model", action: "list", isEmpty })),
+    renderListCounts(items.length, total),
+    isEmpty ? emptyState("models") : renderList("models", items, schema),
+    renderHelp(
+      getSuggestions({
+        domain: "model",
+        action: "list",
+        isEmpty,
+        nextPage: nextPage(q.page, q.pagesize, items.length, total),
+        nextPageFlags:
+          q.pagesize === 10 ? [] : ["--pagesize", String(q.pagesize)],
+      }),
+    ),
   ]);
 }
 
 async function viewModel(args: string[]): Promise<string> {
-  const name = getPositional(args, 0);
+  const schema = selectFields(args, viewSchema, viewSchema, "model view");
+  const name = getPositional(args, 0, ["--fields"]);
   if (!name) {
     throw new AxiError(
       "Model name is required: mesheryctl-axi model view <name>",
@@ -104,13 +129,13 @@ async function viewModel(args: string[]): Promise<string> {
   }
   const payload = await mesheryctlJson(modelViewArgv(name, "json"));
   return renderOutput([
-    renderDetail("model", normalizeModel(asObject(payload)), viewSchema),
+    renderDetail("model", normalizeModel(asObject(payload)), schema),
     renderHelp(getSuggestions({ domain: "model", action: "view" })),
   ]);
 }
 
 async function contentModel(args: string[]): Promise<string> {
-  const name = getPositional(args, 0);
+  const name = getPositional(args, 0, ["--format"]);
   if (!name) {
     throw new AxiError(
       "Model name is required: mesheryctl-axi model content <name> [--format yaml|json]",
@@ -141,16 +166,17 @@ export async function modelCommand(args: string[]): Promise<string> {
       rejectUnknownFlags(args.slice(1), MODEL_FLAGS.view, "model", "view");
       return viewModel(args.slice(1));
     case "content":
-      rejectUnknownFlags(args.slice(1), MODEL_FLAGS.content, "model", "content");
+      rejectUnknownFlags(
+        args.slice(1),
+        MODEL_FLAGS.content,
+        "model",
+        "content",
+      );
       return contentModel(args.slice(1));
     default:
-      throw new AxiError(
-        `Unknown subcommand: ${sub}`,
-        "VALIDATION_ERROR",
-        [
-          "Available subcommands: list, view, content",
-          "mesheryctl-axi model --help",
-        ],
-      );
+      throw new AxiError(`Unknown subcommand: ${sub}`, "VALIDATION_ERROR", [
+        "Available subcommands: list, view, content",
+        "mesheryctl-axi model --help",
+      ]);
   }
 }
