@@ -309,6 +309,32 @@ describe("connection list via Server API", () => {
   });
 });
 
+describe("list pagination validation", () => {
+  it.each([
+    ["connection", connectionCommand],
+    ["design", designCommand],
+    ["model", modelCommand],
+    ["component", componentCommand],
+  ] as const)(
+    "rejects invalid %s pagination before fetching",
+    async (_name, command) => {
+      let fetched = false;
+      setServerFetcher(async () => {
+        fetched = true;
+        return jsonResponse({});
+      });
+
+      await expect(command(["list", "--page", "2oops"])).rejects.toMatchObject({
+        code: "VALIDATION_ERROR",
+      });
+      await expect(command(["list", "--pagesize="])).rejects.toMatchObject({
+        code: "VALIDATION_ERROR",
+      });
+      expect(fetched).toBe(false);
+    },
+  );
+});
+
 describe("design content is never TOON", () => {
   it("returns YAML content verbatim with exact argv", async () => {
     const yaml =

@@ -88,10 +88,7 @@ function normalizeDesign(
 async function listDesigns(args: string[]): Promise<string> {
   const schema = selectFields(args, listSchema, viewSchema, "design list");
   // Interim Server API — mesheryctl design list has no --output-format.
-  const q = listQueryFromFlags({
-    page: getFlag(args, "--page"),
-    pagesize: getFlag(args, "--pagesize") ?? getFlag(args, "--limit"),
-  });
+  const q = listQueryFromFlags(args);
   const payload = await serverGetJson<Record<string, unknown>>({
     path: API.designs,
     query: { page: q.page, pagesize: q.pagesize },

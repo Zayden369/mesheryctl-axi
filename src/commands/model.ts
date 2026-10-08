@@ -88,10 +88,7 @@ function normalizeModel(
 
 async function listModels(args: string[]): Promise<string> {
   const schema = selectFields(args, listSchema, viewSchema, "model list");
-  const q = listQueryFromFlags({
-    page: getFlag(args, "--page"),
-    pagesize: getFlag(args, "--pagesize") ?? getFlag(args, "--limit"),
-  });
+  const q = listQueryFromFlags(args);
   const payload = await serverGetJson<Record<string, unknown>>({
     path: API.models,
     query: { page: q.page, pagesize: q.pagesize },

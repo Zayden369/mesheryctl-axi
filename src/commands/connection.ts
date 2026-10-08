@@ -1,5 +1,4 @@
 import {
-  getFlag,
   getFlagValues,
   getPositional,
   rejectUnknownFlags,
@@ -107,10 +106,7 @@ async function listConnections(args: string[]): Promise<string> {
   const statuses = getFlagValues(args, ["--status", "-s"]);
   // Interim: mesheryctl connection list has no --output-format; use Server API
   // (same path as mesheryctl: api/integrations/connections). Never scrape tables.
-  const q = listQueryFromFlags({
-    page: getFlag(args, "--page"),
-    pagesize: getFlag(args, "--pagesize") ?? getFlag(args, "--limit"),
-  });
+  const q = listQueryFromFlags(args);
   const payload = await serverGetJson<Record<string, unknown>>({
     path: API.connections,
     query: {

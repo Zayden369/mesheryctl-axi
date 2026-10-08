@@ -156,24 +156,40 @@ export async function serverGetJson<T = unknown>(
   }
 }
 
-/**
- * Convert 1-based user --page to mesheryctl's zero-based API page.
- * Defaults to page 0 / pagesize 10 when unset (mesheryctl display defaults).
- */
-export function listQueryFromFlags(args: {
-  page?: string;
-  pagesize?: string;
-}): { page: number; pagesize: number } {
-  const pageOneBased = args.page ? Number.parseInt(args.page, 10) : 1;
-  const pagesize = args.pagesize ? Number.parseInt(args.pagesize, 10) : 10;
-  const page = Number.isFinite(pageOneBased)
-    ? Math.max(0, pageOneBased - 1)
-    : 0;
+function positiveIntegerFlag(args: string[], name: string): number | undefined {
+  let first: number | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg !== name && !arg.startsWith(`${name}=`)) continue;
+
+    const value = arg === name ? args[i + 1] : arg.slice(name.length + 1);
+    if (arg === name && value !== undefined && !value.startsWith("-")) i++;
+    const number = value && /^\d+$/.test(value) ? Number(value) : NaN;
+    if (!Number.isSafeInteger(number) || number <= 0) {
+      throw new AxiError(
+        `${name} requires a positive whole number`,
+        "VALIDATION_ERROR",
+        [`Use ${name} <positive-integer>`],
+      );
+    }
+    first ??= number;
+  }
+  return first;
+}
+
+/** Convert 1-based --page to the Server API's zero-based page. */
+export function listQueryFromFlags(args: string[]): {
+  page: number;
+  pagesize: number;
+} {
+  const pageOneBased = positiveIntegerFlag(args, "--page") ?? 1;
+  const requestedPageSize = positiveIntegerFlag(args, "--pagesize");
+  const requestedLimit = positiveIntegerFlag(args, "--limit");
+  const pagesize = requestedPageSize ?? requestedLimit ?? 10;
   return {
-    page,
+    page: pageOneBased - 1,
     // Meshery Server caps pageSize at 100; mirror that so next-page detection
     // uses the page size the server actually applied.
-    pagesize:
-      Number.isFinite(pagesize) && pagesize > 0 ? Math.min(pagesize, 100) : 10,
+    pagesize: Math.min(pagesize, 100),
   };
 }
